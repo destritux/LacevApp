@@ -1,0 +1,13 @@
+tk
+ttkthemes
+pillow
+pandas
+numpy
+scipy
+matplotlib
+seaborn
+antropy
+nolds
+scikit-learn
+tabulate
+statsmodels

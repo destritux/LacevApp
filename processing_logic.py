@@ -405,6 +405,7 @@ class SignalProcessor:
                                 df_features[f"{col}_Z"] = df_features[f"{col}_Z"].replace([np.inf, -np.inf], 0.0).fillna(0.0)
                     
                     output_features_path = self.paths["features"] / class_name / f"features_{Path(filename).stem}.csv"
+                    self._log(f"Saving df_features shape {df_features.shape} to {output_features_path}")
                     df_features.to_csv(output_features_path, index=False)
                 # ---------------------------------------------------
                 

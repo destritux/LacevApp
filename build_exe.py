@@ -66,12 +66,12 @@ def main():
     
     if success:
         print("\n=======================================================")
-        print("🎉 Executável gerado com sucesso!")
+        print("Executável gerado com sucesso!")
         print("Você poderá encontrar o arquivo finalizado em:")
         print(f" -> {Path('dist').resolve()}")
         print("=======================================================")
     else:
-        print("\n❌ Ocorreu um erro durante a compilação do executável.")
+        print("\nOcorreu um erro durante a compilação do executável.")
         sys.exit(1)
 
 if __name__ == "__main__":

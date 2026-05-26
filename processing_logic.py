@@ -196,7 +196,7 @@ def calculate_features(window, fs, gui_log):
     try:
         # Lyapunov de Rosenstein e Eckmann com embedding dinâmico
         features['Lyap_r'] = nolds.lyap_r(window, emb_dim=m, lag=tau, fit='poly')
-        lyap_e_vals = nolds.lyap_e(window, emb_dim=m)
+        lyap_e_vals = nolds.lyap_e(window, emb_dim=m, matrix_dim=m)
         positive_lyap_e = lyap_e_vals[lyap_e_vals > 0]
         features['Lyap_e'] = np.mean(positive_lyap_e) if len(positive_lyap_e) > 0 else 0.0
     except Exception as e:
@@ -341,7 +341,7 @@ class SignalProcessor:
                 file_window_samples = int(self.window_minutes * 60 * file_fs)
 
                 if file_window_samples < 100 or total_points < file_window_samples:
-                    self._log(f"  - ❌ ERRO: Janela inviável para TDAF. Mínimo 100 pts. Pulando arquivo.")
+                    self._log(f"  - ERRO: Janela inviável para TDAF. Mínimo 100 pts. Pulando arquivo.")
                     continue
 
                 # Validação dinâmica da janela espectral para oscilações infra-lentas (ISO: mínimo 600s/10min)

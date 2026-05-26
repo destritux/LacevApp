@@ -49,9 +49,25 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
             summary_stats[f'{col}'].append(df[col].mean())
 
     summary_df = pd.DataFrame(summary_stats).set_index('Classe')
-    comparison_df = (summary_df.pct_change() * 100).iloc[[-1]]
-    comparison_df = comparison_df.rename(index={comparison_df.index[0]: f'% Mudança ({comparison_df.index[0]} vs {summary_df.index[0]})'})
-
+    
+    # Geração de Diferença Percentual para todos os pares classe a classe
+    import itertools
+    classes = sorted(all_data.keys())
+    pairs = list(itertools.combinations(classes, 2))
+    
+    comparison_rows = []
+    for classA, classB in pairs:
+        row_data = {'Par': f"{classB} vs {classA}"}
+        for col in numeric_cols:
+            valA = summary_df.loc[classA, col]
+            valB = summary_df.loc[classB, col]
+            if valA != 0 and not pd.isna(valA) and valA is not None:
+                row_data[col] = ((valB - valA) / valA) * 100
+            else:
+                row_data[col] = np.nan
+        comparison_rows.append(row_data)
+        
+    comparison_df = pd.DataFrame(comparison_rows).set_index('Par')
     summary_df_transposed = summary_df.T
     comparison_df_transposed = comparison_df.T
 
@@ -68,7 +84,6 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
         gui_log_callback("Tentando processar estatísticas de Regressão Linear (OLS) pareadas...")
         import statsmodels.formula.api as smf
         import numpy as np
-        import itertools
         import json
         
         master_df = pd.concat(master_df_list, ignore_index=True)
@@ -189,7 +204,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                 most_diff_count = most_diff_row['Características Significativas (Aceito)']
                 highlight_html = f"""
                 <div class="highlight-box">
-                    <h3>📢 Destaque de Divergência Biológica</h3>
+                    <h3>Destaque de Divergência Biológica</h3>
                     <p>O par de classes com <b>maior diferença geral</b> é <b>{most_diff_pair}</b>, apresentando <b>{most_diff_count}</b> características normalizadas com diferença estatisticamente significativa (p < 0.05).</p>
                 </div>
                 """
@@ -225,14 +240,14 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                     coef_str = "" if pd.isna(r['Efeito (Coef)']) else f"{r['Efeito (Coef)']:.4f}"
                     badge = f"<span class='badge badge-success'>Sim</span>" if r['Significativo?'] == "Sim" else f"<span class='badge badge-neutral'>Não</span>"
                     url = _get_metric_url(r['Métrica Z-Score'])
-                    metric_link = f"<a href='{url}' target='_blank' class='info-link'><b>{r['Métrica Z-Score']}</b> ℹ️</a>"
+                    metric_link = f"<a href='{url}' target='_blank' class='info-link'><b>{r['Métrica Z-Score']}</b> (info)</a>"
                     table_rows += f"<tr><td>{metric_link}</td><td>{coef_str}</td><td>{p_str}</td><td>{badge}</td></tr>"
                 
                 pair_table = f"""
                 <table>
                     <thead>
                         <tr>
-                            <th>Métrica Z-Score (Definição ℹ️)</th>
+                            <th>Métrica Z-Score (Definição)</th>
                             <th>Efeito (Coeficiente)</th>
                             <th>P-Value</th>
                             <th>Significativo? (p < 0.05)</th>
@@ -572,14 +587,25 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
             min-height: 400px;
             display: flex;
             flex-direction: column;
+            justify-content: space-between;
         }
 
         .chart-card h3 {
-            margin-top: 0;
-            margin-bottom: 20px;
-            font-size: 1.15rem;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 10px;
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .chart-card h3::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 16px;
+            background-color: var(--primary);
+            border-radius: 2px;
         }
 
         .chart-container {
@@ -587,6 +613,31 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
             flex-grow: 1;
             height: 320px;
             width: 100%;
+            margin-top: 15px;
+        }
+
+        .btn-save {
+            background-color: var(--bg-main);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-save:hover {
+            background-color: var(--border);
+            color: var(--text-primary);
+        }
+
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            margin-bottom: 30px;
         }
 
         /* Beautiful Tables */
@@ -815,72 +866,72 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
         <!-- Header Section -->
         <div class="header-container">
             <div class="header-left">
-                <h1>🌱 LacevApp — Eletrofisiologia Vegetal</h1>
-                <p>Relatório Científico & Comparativos Estatísticos</p>
+                <h1>LacevApp - Plant Electrophysiology Analysis</h1>
+                <p>Scientific Report & Statistical Comparisons</p>
             </div>
-            <button class="theme-toggle-btn" onclick="toggleTheme()">🌓 Alternar Tema</button>
+            <button class="theme-toggle-btn" onclick="toggleTheme()">Toggle Theme</button>
         </div>
 
         <!-- System Tabs -->
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('dashboard')">📈 Dashboard Interativo</button>
-            <button class="tab-btn" onclick="switchTab('resumos')">📊 Médias & Comparativos</button>
-            <button class="tab-btn" onclick="switchTab('ols')">🔬 Regressão Pareada OLS</button>
-            <button class="tab-btn" onclick="switchTab('glossario')">📖 Glossário & Informação</button>
+            <button class="tab-btn active" onclick="switchTab('dashboard')">Interactive Dashboard</button>
+            <button class="tab-btn" onclick="switchTab('resumos')">Means & Comparisons</button>
+            <button class="tab-btn" onclick="switchTab('ols')">Pairwise OLS Regression</button>
+            <button class="tab-btn" onclick="switchTab('glossario')">Glossary & Info</button>
         </div>
 
         <!-- Experiment description (Global) -->
         <div class="section experiment-desc">
-            <h2>Descrição do Experimento</h2>
+            <h2>Experiment Description</h2>
             <p>__EXPERIMENT_DESCRIPTION__</p>
         </div>
 
         <!-- Highlight Box (Global) -->
         __HIGHLIGHT_HTML__
 
-        <!-- Tab 1: Dashboard Interativo -->
+        <!-- Tab 1: Interactive Dashboard -->
         <div id="tab-dashboard" class="tab-content active">
             <div class="control-panel">
                 <div class="control-group">
-                    <label for="metric-select">🔍 Selecione a Métrica Fisiológica:</label>
+                    <label for="metric-select">Select Physiological Metric:</label>
                     <select id="metric-select" onchange="updateCharts()">
-                        <optgroup label="Medidas Temporais (Voltagem)">
-                            <option value="Raw_mean">Média de Voltagem Bruta</option>
-                            <option value="Raw_min">Mínimo de Voltagem Bruta</option>
-                            <option value="Raw_max">Máximo de Voltagem Bruta</option>
-                            <option value="Raw_var">Variância de Voltagem Bruta</option>
+                        <optgroup label="Time-Domain Metrics (Voltage)">
+                            <option value="Raw_mean">Raw Voltage Mean</option>
+                            <option value="Raw_min">Raw Voltage Minimum</option>
+                            <option value="Raw_max">Raw Voltage Maximum</option>
+                            <option value="Raw_var">Raw Voltage Variance</option>
                         </optgroup>
-                        <optgroup label="Complexidade Dinâmica e Caos">
+                        <optgroup label="Dynamic Complexity and Chaos">
                             <option value="ApEn">Approximate Entropy (ApEn)</option>
                             <option value="SampleEntropy" selected>Sample Entropy (SampEn)</option>
-                            <option value="DFA">Detrended Fluctuation Analysis (Expoente de Hurst)</option>
-                            <option value="Lyap_r">Expoente de Lyapunov (Dimensão ACF)</option>
-                            <option value="Lyap_e">Expoente de Lyapunov (Dimensão FNN)</option>
+                            <option value="DFA">Detrended Fluctuation Analysis (Hurst Exponent)</option>
+                            <option value="Lyap_r">Lyapunov Exponent (Rosenstein / Delay Dimension)</option>
+                            <option value="Lyap_e">Lyapunov Exponent (Eckmann-Ruelle / Embedding Dimension)</option>
                         </optgroup>
-                        <optgroup label="Frequência e Espectro">
-                            <option value="FFT_mean">Média de FFT</option>
-                            <option value="FFT_min">Mínimo de FFT</option>
-                            <option value="FFT_max">Máximo de FFT</option>
-                            <option value="FFT_var">Variância de FFT</option>
-                            <option value="PSD_mean">Média de PSD (Multitaper)</option>
-                            <option value="PSD_min">Mínimo de PSD (Multitaper)</option>
-                            <option value="PSD_max">Máximo de PSD (Multitaper)</option>
-                            <option value="PSD_var">Variância de PSD (Multitaper)</option>
+                        <optgroup label="Frequency and Spectrum">
+                            <option value="FFT_mean">FFT Mean</option>
+                            <option value="FFT_min">FFT Minimum</option>
+                            <option value="FFT_max">FFT Maximum</option>
+                            <option value="FFT_var">FFT Variance</option>
+                            <option value="PSD_mean">PSD Mean (Multitaper)</option>
+                            <option value="PSD_min">PSD Minimum (Multitaper)</option>
+                            <option value="PSD_max">PSD Maximum (Multitaper)</option>
+                            <option value="PSD_var">PSD Variance (Multitaper)</option>
                         </optgroup>
-                        <optgroup label="Bandas de Potência Fisiológicas">
-                            <option value="Bandpower_ISO">Oscilações Infra-Lentas (ISO, 0.005-0.1 Hz)</option>
-                            <option value="Bandpower_Delta">Banda Delta (0.1-4 Hz)</option>
-                            <option value="Bandpower_Theta">Banda Theta (4-8 Hz)</option>
-                            <option value="Bandpower_Alpha">Banda Alpha (8-12 Hz)</option>
-                            <option value="Bandpower_Beta">Banda Beta (12-30 Hz)</option>
+                        <optgroup label="Physiological Bandpowers">
+                            <option value="Bandpower_ISO">Infra-Slow Oscillations (ISO, 0.005-0.1 Hz)</option>
+                            <option value="Bandpower_Delta">Delta Band (0.1-4 Hz)</option>
+                            <option value="Bandpower_Theta">Theta Band (4-8 Hz)</option>
+                            <option value="Bandpower_Alpha">Alpha Band (8-12 Hz)</option>
+                            <option value="Bandpower_Beta">Beta Band (12-30 Hz)</option>
                         </optgroup>
                     </select>
                 </div>
                 
                 <div class="control-group">
-                    <label>📊 Tipo de Escala:</label>
+                    <label>Scale Type:</label>
                     <div class="toggle-container">
-                        <button id="toggle-raw" class="toggle-btn active" onclick="setMode('raw')">Valores Brutos</button>
+                        <button id="toggle-raw" class="toggle-btn active" onclick="setMode('raw')">Raw Values</button>
                         <button id="toggle-zscore" class="toggle-btn" onclick="setMode('zscore')">Z-Scores (Baseline)</button>
                     </div>
                 </div>
@@ -888,14 +939,20 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
 
             <div class="grid-2">
                 <div class="chart-card">
-                    <h3>Evolução Temporal (Minuto a Minuto)</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:15px;">
+                        <h3 style="margin:0;">Temporal Evolution (Minute-by-Minute)</h3>
+                        <button class="btn-save" onclick="saveChart('lineChart', 'temporal_evolution')">Export PNG</button>
+                    </div>
                     <div class="chart-container">
                         <canvas id="lineChart"></canvas>
                     </div>
                 </div>
                 
                 <div class="chart-card">
-                    <h3>Comparação de Médias Gerais</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:15px;">
+                        <h3 style="margin:0;">General Mean Comparison</h3>
+                        <button class="btn-save" onclick="saveChart('barChart', 'mean_comparison')">Export PNG</button>
+                    </div>
                     <div class="chart-container">
                         <canvas id="barChart"></canvas>
                     </div>
@@ -903,7 +960,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
             </div>
             
             <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 15px; text-align: center;">
-                💡 <i>Dica: Clique nas classes na legenda do gráfico de linhas para ocultar/exibir curvas específicas.</i>
+                Note: Click on classes in the line chart legend to hide or show specific curves.
             </p>
         </div>
 
@@ -913,12 +970,16 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
             
             <div class="section">
                 <h2>Resumo das Médias por Classe (Bruto e Z-Score)</h2>
-                __SUMMARY_TABLE__
+                <div class="table-container">
+                    __SUMMARY_TABLE__
+                </div>
             </div>
 
             <div class="section">
-                <h2>Diferença Percentual (Relativo Bruto)</h2>
-                __COMPARISON_TABLE__
+                <h2>Diferença Percentual (Relativo Bruto) - Todos os Pares</h2>
+                <div class="table-container">
+                    __COMPARISON_TABLE__
+                </div>
             </div>
         </div>
 
@@ -940,37 +1001,37 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                 <div class="glossary-card">
                     <h4>Approximate Entropy (ApEn)</h4>
                     <p>Mede a regularidade e flutuações de ruído em séries temporais. Valores menores indicam sinais muito repetitivos e estruturados, enquanto valores maiores indicam maior complexidade ou imprevisibilidade.</p>
-                    <a href="https://en.wikipedia.org/wiki/Approximate_entropy" target="_blank">Ler mais na Wikipédia ↗</a>
+                    <a href="https://en.wikipedia.org/wiki/Approximate_entropy" target="_blank">Acesse a definição</a>
                 </div>
 
                 <div class="glossary-card">
                     <h4>Sample Entropy (SampEn)</h4>
                     <p>Uma evolução direta da Approximate Entropy (ApEn) projetada para eliminar o viés de auto-comparação (auto-matching). SampEn exibe estabilidade matemática e consistência estatística mesmo em fragmentos de sinal mais curtos.</p>
-                    <a href="https://en.wikipedia.org/wiki/Sample_entropy" target="_blank">Ler mais na Wikipédia ↗</a>
+                    <a href="https://en.wikipedia.org/wiki/Sample_entropy" target="_blank">Acesse a definição</a>
                 </div>
 
                 <div class="glossary-card">
                     <h4>Detrended Fluctuation Analysis (DFA)</h4>
                     <p>Mapeia correlações de longo alcance em sinais biológicos não estacionários. O expoente de escala estimado (expoente de Hurst) indica a presença de memória fractal de longo prazo no comportamento bioelétrico da planta.</p>
-                    <a href="https://en.wikipedia.org/wiki/Detrended_fluctuation_analysis" target="_blank">Ler mais na Wikipédia ↗</a>
+                    <a href="https://en.wikipedia.org/wiki/Detrended_fluctuation_analysis" target="_blank">Acesse a definição</a>
                 </div>
 
                 <div class="glossary-card">
                     <h4>Expoente de Lyapunov</h4>
                     <p>Parâmetro central da Teoria do Caos que quantifica o grau de caoticidade de um sistema dinâmico. Mede a taxa de divergência exponencial de trajetórias inicialmente próximas no espaço de fases.</p>
-                    <a href="https://en.wikipedia.org/wiki/Lyapunov_exponent" target="_blank">Ler mais na Wikipédia ↗</a>
+                    <a href="https://en.wikipedia.org/wiki/Lyapunov_exponent" target="_blank">Acesse a definição</a>
                 </div>
 
                 <div class="glossary-card">
                     <h4>Densidade Espectral (PSD - Multitaper)</h4>
                     <p>Estimação de alta resolução baseada no estimador Multitaper (DPSS). Minimiza vazamentos espectrais de energia e reduz a variância do espectro de potência através de tapers ortogonais ótimos de Slepian.</p>
-                    <a href="https://en.wikipedia.org/wiki/Spectral_density" target="_blank">Ler mais na Wikipédia ↗</a>
+                    <a href="https://en.wikipedia.org/wiki/Spectral_density" target="_blank">Acesse a definição</a>
                 </div>
 
                 <div class="glossary-card">
                     <h4>Oscilações Infra-Lentas (ISO)</h4>
                     <p>Banda eletrofisiológica vegetal na faixa de 0.005 Hz a 0.1 Hz. Corresponde a ritmos bioelétricos lentos fundamentais para a regulação do balanço hídrico, fluxo vascular e sinalização sistêmica sob estresse.</p>
-                    <a href="https://pubmed.ncbi.nlm.nih.gov/?term=infra-slow+oscillations+plants" target="_blank">Buscar artigos no PubMed ↗</a>
+                    <a href="https://pubmed.ncbi.nlm.nih.gov/?term=infra-slow+oscillations+plants" target="_blank">Buscar artigos</a>
                 </div>
             </div>
         </div>
@@ -1018,6 +1079,26 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
             updateCharts();
         }
 
+        function saveChart(chartId, filename) {
+            const canvas = document.getElementById(chartId);
+            if (!canvas) return;
+            
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            const isDark = document.body.classList.contains('dark-theme');
+            tempCtx.fillStyle = isDark ? '#1e293b' : '#ffffff';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            const link = document.createElement('a');
+            link.download = filename + '.png';
+            link.href = tempCanvas.toDataURL('image/png');
+            link.click();
+        }
+
         function updateCharts() {
             const metricSelect = document.getElementById('metric-select');
             const metric = metricSelect.value;
@@ -1060,8 +1141,10 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                     data: values,
                     borderColor: classColors[className] || '#cbd5e1',
                     backgroundColor: (classColors[className] || '#cbd5e1') + '10',
-                    borderWidth: 2.5,
-                    tension: 0.25,
+                    borderWidth: 1.8,
+                    tension: 0.1,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
                     fill: false
                 });
                 
@@ -1104,6 +1187,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                     },
                     scales: {
                         x: {
+                            title: { display: true, text: 'Time (Minutes)', color: textColor, font: { family: 'Outfit', weight: 600 } },
                             grid: { display: false },
                             ticks: { color: textColor, font: { family: 'Inter' } }
                         },
@@ -1143,11 +1227,12 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                     },
                     scales: {
                         x: {
+                            title: { display: true, text: 'Treatment Class', color: textColor, font: { family: 'Outfit', weight: 600 } },
                             grid: { display: false },
                             ticks: { color: textColor, font: { family: 'Inter' } }
                         },
                         y: {
-                            title: { display: true, text: `Média de ${yLabel}`, color: textColor, font: { family: 'Outfit', weight: 600 } },
+                            title: { display: true, text: `Mean ${yLabel}`, color: textColor, font: { family: 'Outfit', weight: 600 } },
                             grid: { color: gridColor },
                             ticks: { color: textColor, font: { family: 'Inter' } }
                         }
@@ -1165,14 +1250,17 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
 </html>
 """
 
-    # Realiza as substituições no template HTML de forma robusta e livre de problemas com chaves do f-string
-    html = html_template
-    html = html.replace("__EXPERIMENT_DESCRIPTION__", str(experiment_description))
-    html = html.replace("__HIGHLIGHT_HTML__", str(highlight_html))
-    html = html.replace("__INTERPRETATIONS_HTML__", str(interpretations_html))
-    html = html.replace("__SUMMARY_TABLE__", summary_df_transposed.to_html(float_format='%.4f'))
-    html = html.replace("__COMPARISON_TABLE__", comparison_df_transposed.to_html(float_format='%.2f'))
-    html = html.replace("__OLS_HTML__", str(ols_html))
+    # Formatar tabelas estatísticas como tabelas HTML responsivas
+    summary_table_html = summary_df_transposed.to_html(border=0, classes='table summary-table', float_format=lambda x: f"{x:.4f}")
+    comparison_table_html = comparison_df_transposed.to_html(border=0, classes='table comparison-table', float_format=lambda x: f"{x:.4f}")
+
+    # Fazer as substituições no template
+    html = html_template.replace("__EXPERIMENT_DESCRIPTION__", str(experiment_description))
+    html = html.replace("__HIGHLIGHT_HTML__", highlight_html)
+    html = html.replace("__INTERPRETATIONS_HTML__", interpretations_html)
+    html = html.replace("__SUMMARY_TABLE__", summary_table_html)
+    html = html.replace("__COMPARISON_TABLE__", comparison_table_html)
+    html = html.replace("__OLS_HTML__", ols_html)
     html = html.replace("__DATASET_JSON__", json_data_str)
 
     report_path = results_path / "report.html"

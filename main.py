@@ -315,10 +315,10 @@ class LacevApp(ThemedTk):
                     except Exception as e:
                         print(f"Erro ao limpar {folder}: {e}")
                         
-        self._log("🧹 Ambiente e arquivos residuais limpos. Pronto para nova análise.")
+        self._log("Ambiente e arquivos residuais limpos. Pronto para nova análise.")
     
     def _stop_action(self):
-        self._log("⚠️ Solicitação de interrupção recebida. Parando processo e limpando ambiente...")
+        self._log("Aviso: Solicitação de interrupção recebida. Parando processo e limpando ambiente...")
         self.stop_event.set()
         self.btn_stop.config(state=tk.DISABLED)
 
@@ -372,9 +372,9 @@ class LacevApp(ThemedTk):
             processor.run_tdsf_extraction(progress_callback=self._update_progress)
             
             if not self.stop_event.is_set():
-                self._log("\n✅ Processamento concluído com sucesso!")
+                self._log("\nProcessamento concluído com sucesso!")
         except Exception as e:
-            self._log(f"\n❌ Ocorreu um erro: {e}")
+            self._log(f"\nOcorreu um erro: {e}")
             self._log(traceback.format_exc())
         finally:
             self._set_ui_state('normal')
@@ -424,9 +424,9 @@ class LacevApp(ThemedTk):
                     plotting_logic.plot_tdsf(base_path, feature_group, themes_to_plot=selected_themes,
                                              log_scale=True, gui_log_callback=self._log)
             if not self.stop_event.is_set():
-                self._log(f"\n✅ Plotagem concluída com sucesso!")
+                self._log(f"\nPlotagem concluída com sucesso!")
         except Exception as e:
-            self._log(f"\n❌ Ocorreu um erro durante a plotagem: {e}")
+            self._log(f"\nOcorreu um erro durante a plotagem: {e}")
             self._log(traceback.format_exc())
         finally:
             self._set_ui_state('normal')
@@ -454,7 +454,7 @@ class LacevApp(ThemedTk):
                 gui_log_callback=self._log
             )
             report_path = Path(base_path) / "results" / "report.html"
-            self._log(f"\n✅ Relatório gerado com sucesso! Guardado em: {report_path}")
+            self._log(f"\nRelatório gerado com sucesso! Guardado em: {report_path}")
             try:
                 os.startfile(report_path)
             except AttributeError:

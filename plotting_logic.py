@@ -176,13 +176,13 @@ def plot_tdsf(base_path, feature_group, themes_to_plot=['Escuro', 'Claro'], log_
                     raise ValueError(f"Coluna de tempo ('minute') ausente em {class_file}.")
 
                 x_col = minute_col
-                if 'timestamp' in df.columns:
-                    try:
-                        df['timestamp'] = pd.to_datetime(df['timestamp'])
-                        x_col = 'timestamp'
-                        used_timestamp = True
-                    except Exception:
-                        pass
+               # if 'timestamp' in df.columns:
+               #     try:
+               #         df['timestamp'] = pd.to_datetime(df['timestamp'])
+               #         x_col = 'timestamp'
+               #         used_timestamp = True
+               #    except Exception:
+               #         pass
 
                 actual_col = find_first_existing_column(df.columns, aliases)
                 if actual_col:

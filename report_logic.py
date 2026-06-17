@@ -365,7 +365,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
             y_rf = rf_df['TreatmentClass']
             
             if len(y_rf.unique()) >= 2:
-                rf = RandomForestClassifier(n_estimators=100, random_state=42)
+                rf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
                 rf.fit(X_rf, y_rf)
                 importances = rf.feature_importances_
                 
@@ -393,7 +393,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                             X_rf, y_rf, test_size=0.3, random_state=42
                         )
                     
-                    rf_eval = RandomForestClassifier(n_estimators=100, random_state=42)
+                    rf_eval = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
                     rf_eval.fit(X_train, y_train)
                     y_pred = rf_eval.predict(X_test)
                     
@@ -410,7 +410,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                     gui_log_callback(f"Aviso no cálculo da matriz de confusão: {e_cm}")
                     try:
                         from sklearn.metrics import confusion_matrix, accuracy_score
-                        rf_eval = RandomForestClassifier(n_estimators=100, random_state=42)
+                        rf_eval = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
                         rf_eval.fit(X_rf, y_rf)
                         y_pred = rf_eval.predict(X_rf)
                         cm_classes = sorted(list(y_rf.unique()))
@@ -463,12 +463,12 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                                         X_tr, X_te, y_tr, y_te = train_test_split(
                                             X_pair, y_pair, test_size=0.3, random_state=42
                                         )
-                                    rf_pair = RandomForestClassifier(n_estimators=50, random_state=42)
+                                    rf_pair = RandomForestClassifier(n_estimators=50, max_depth=10, random_state=42)
                                     rf_pair.fit(X_tr, y_tr)
                                     y_pred_pair = rf_pair.predict(X_te)
                                     pair_acc = float(accuracy_score(y_te, y_pred_pair))
                                 except Exception:
-                                    rf_pair = RandomForestClassifier(n_estimators=50, random_state=42)
+                                    rf_pair = RandomForestClassifier(n_estimators=50, max_depth=10, random_state=42)
                                     rf_pair.fit(X_pair, y_pair)
                                     y_pred_pair = rf_pair.predict(X_pair)
                                     pair_acc = float(accuracy_score(y_pair, y_pred_pair))

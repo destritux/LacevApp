@@ -448,22 +448,19 @@ class LacevApp(ThemedTk):
     def _report_worker(self, base_path, experiment_description):
         try:
             self._log("--- A iniciar a Geração do Relatório ---")
-            report_logic.generate_html_report(
+            json_path = report_logic.generate_html_report(
                 base_path=base_path,
                 experiment_description=experiment_description,
                 gui_log_callback=self._log
             )
-            report_path = Path(base_path) / "results" / "report.html"
-            self._log(f"\nRelatório gerado com sucesso! Guardado em: {report_path}")
+            self._log(f"\nDados do relatório gerados com sucesso! Guardados em: {json_path}")
+            self._log("\nPara visualizar o relatório, faça o upload desse ficheiro JSON no site:")
+            self._log("https://destritux.github.io/LACEVApp-stat/")
             try:
-                os.startfile(report_path)
-            except AttributeError:
-                import subprocess
-                import platform
-                if platform.system() == 'Darwin':
-                    subprocess.call(['open', report_path])
-                else:
-                    subprocess.call(['xdg-open', report_path])
+                import webbrowser
+                webbrowser.open("https://destritux.github.io/LACEVApp-stat/")
+            except Exception as e:
+                self._log(f"Aviso: Não foi possível abrir o site automaticamente: {e}")
         except Exception as e:
             self._log(f"\nOcorreu um erro durante a geração do relatório: {e}")
             self._log(traceback.format_exc())

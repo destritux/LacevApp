@@ -427,7 +427,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                 # Interactive Decision Tree
                 try:
                     from sklearn.tree import DecisionTreeClassifier
-                    dt = DecisionTreeClassifier(max_depth=4, random_state=42)
+                    dt = DecisionTreeClassifier(max_leaf_nodes=10, max_depth=4, random_state=42)
                     dt.fit(X_rf, y_rf)
                     decision_tree_data = export_tree_structure(dt, list(X_rf.columns), list(dt.classes_))
                 except Exception as e_dt:

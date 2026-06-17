@@ -282,10 +282,15 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
         master_df = pd.concat(master_df_list, ignore_index=True)
         raw_cols = [c for c in numeric_cols if not c.endswith('_Z')]
 
-        # 1. Séries temporais limpas
+        # 1. Séries temporais limpas (agrupadas por minuto para calcular a média dos replicates)
         time_series_data = {}
         for c_name, c_df in all_data.items():
-            c_df_clean = c_df.copy().replace({np.nan: None})
+            num_df = c_df.select_dtypes(include='number')
+            if 'minute' not in num_df.columns and 'minute' in c_df.columns:
+                num_df['minute'] = c_df['minute']
+            c_df_grouped = num_df.groupby('minute', as_index=False).mean()
+            c_df_grouped = c_df_grouped.sort_values('minute')
+            c_df_clean = c_df_grouped.replace({np.nan: None})
             time_series_data[c_name] = c_df_clean.to_dict(orient='records')
 
         # 2. Correlação de Pearson (métricas brutas)
@@ -427,7 +432,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
                 # Interactive Decision Tree
                 try:
                     from sklearn.tree import DecisionTreeClassifier
-                    dt = DecisionTreeClassifier(max_leaf_nodes=10, max_depth=4, random_state=42)
+                    dt = DecisionTreeClassifier(max_depth=10, random_state=42)
                     dt.fit(X_rf, y_rf)
                     decision_tree_data = export_tree_structure(dt, list(X_rf.columns), list(dt.classes_))
                 except Exception as e_dt:

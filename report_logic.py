@@ -3,6 +3,166 @@ import numpy as np
 from pathlib import Path
 import glob
 from PIL import Image
+import scipy.stats
+import scipy.interpolate
+
+class TimeSeriesClusterTest:
+    def __init__(self, n_permutations=1000, alpha_local=0.05, min_replicates=3):
+        self.n_permutations = n_permutations
+        self.alpha_local = alpha_local
+        self.min_replicates = min_replicates
+
+    def _fast_ttest_2groups(self, g1, g2):
+        """Welch's independent t-test computed column-wise (vectorized)"""
+        n1 = np.sum(~np.isnan(g1), axis=0)
+        n2 = np.sum(~np.isnan(g2), axis=0)
+        
+        m1 = np.nanmean(g1, axis=0)
+        m2 = np.nanmean(g2, axis=0)
+        v1 = np.nanvar(g1, axis=0, ddof=1)
+        v2 = np.nanvar(g2, axis=0, ddof=1)
+        
+        pooled_se = np.sqrt(v1 / n1 + v2 / n2)
+        pooled_se = np.where(pooled_se == 0, 1e-10, pooled_se)
+        
+        t = (m1 - m2) / pooled_se
+        
+        # Welch-Satterthwaite degrees of freedom
+        num = (v1/n1 + v2/n2)**2
+        den = (v1/n1)**2 / (n1 - 1) + (v2/n2)**2 / (n2 - 1)
+        den = np.where(den == 0, 1e-10, den)
+        df = num / den
+        df = np.maximum(df, 1)
+        
+        p = 2 * (1 - scipy.stats.t.cdf(np.abs(t), df))
+        
+        # Mask out columns with insufficient data
+        mask = (n1 < self.min_replicates) | (n2 < self.min_replicates)
+        t[mask] = np.nan
+        p[mask] = np.nan
+        return t, p
+
+    def _fast_anova_multigroups(self, groups_list):
+        """One-Way ANOVA computed column-wise across multiple group matrices (vectorized)"""
+        k = len(groups_list)
+        n_points = groups_list[0].shape[1]
+        
+        n_g = np.array([np.sum(~np.isnan(g), axis=0) for g in groups_list]) # shape (k, n_points)
+        m_g = np.array([np.nanmean(g, axis=0) for g in groups_list]) # shape (k, n_points)
+        v_g = np.array([np.nanvar(g, axis=0, ddof=1) for g in groups_list]) # shape (k, n_points)
+        
+        total_n = np.sum(n_g, axis=0) # shape (n_points)
+        # Avoid division by zero in grand mean
+        total_n_safe = np.where(total_n == 0, 1, total_n)
+        grand_mean = np.sum(n_g * m_g, axis=0) / total_n_safe # shape (n_points)
+        
+        ss_between = np.sum(n_g * (m_g - grand_mean)**2, axis=0)
+        df_between = k - 1
+        ms_between = ss_between / df_between
+        
+        ss_within = np.sum((n_g - 1) * v_g, axis=0)
+        df_within = np.sum(n_g - 1, axis=0)
+        df_within_safe = np.maximum(df_within, 1)
+        ms_within = ss_within / df_within_safe
+        
+        # Avoid division by zero
+        ms_within = np.where(ms_within == 0, 1e-10, ms_within)
+        f_vals = ms_between / ms_within
+        p_vals = scipy.stats.f.sf(f_vals, df_between, df_within_safe)
+        
+        # Mask out columns with insufficient data
+        insufficient = np.any(n_g < self.min_replicates, axis=0)
+        f_vals[insufficient] = np.nan
+        p_vals[insufficient] = np.nan
+        
+        return f_vals, p_vals
+
+    def find_clusters(self, stats, p_values):
+        """Identifies contiguous significant clusters and computes their mass"""
+        sig = (p_values < self.alpha_local) & (~np.isnan(p_values))
+        clusters = []
+        current_cluster = []
+        
+        for idx, is_sig in enumerate(sig):
+            if is_sig:
+                current_cluster.append(idx)
+            else:
+                if current_cluster:
+                    clusters.append(current_cluster)
+                    current_cluster = []
+        if current_cluster:
+            clusters.append(current_cluster)
+            
+        cluster_details = []
+        for c in clusters:
+            mass = np.nansum(np.abs(stats[c]))
+            cluster_details.append({
+                'indices': c,
+                'start_idx': c[0],
+                'end_idx': c[-1],
+                'mass': mass
+            })
+        return cluster_details
+
+    def run_permutation_test(self, groups_list, target_grid):
+        """Runs the cluster permutation test for 2 or more groups"""
+        # 1. Compute Observed Stats
+        if len(groups_list) == 2:
+            stat_obs, p_obs = self._fast_ttest_2groups(groups_list[0], groups_list[1])
+        else:
+            stat_obs, p_obs = self._fast_anova_multigroups(groups_list)
+            
+        obs_clusters = self.find_clusters(stat_obs, p_obs)
+        if not obs_clusters:
+            return [] # No clusters observed
+            
+        # 2. Build Null Distribution via Permutations
+        combined = np.concatenate(groups_list, axis=0)
+        group_sizes = [len(g) for g in groups_list]
+        null_masses = []
+        
+        np.random.seed(42)
+        for _ in range(self.n_permutations):
+            # Shuffle labels by permuting the combined data matrix along axis 0
+            shuffled = np.random.permutation(combined)
+            
+            # Split back into groups
+            shuff_groups = []
+            start = 0
+            for size in group_sizes:
+                shuff_groups.append(shuffled[start:start+size])
+                start += size
+                
+            # Compute stats on permuted groups
+            if len(groups_list) == 2:
+                stat_shuff, p_shuff = self._fast_ttest_2groups(shuff_groups[0], shuff_groups[1])
+            else:
+                stat_shuff, p_shuff = self._fast_anova_multigroups(shuff_groups)
+                
+            shuff_clusters = self.find_clusters(stat_shuff, p_shuff)
+            if shuff_clusters:
+                null_masses.append(max(c['mass'] for c in shuff_clusters))
+            else:
+                null_masses.append(0.0)
+                
+        null_masses = np.array(null_masses)
+        
+        # 3. Correct Observed Cluster p-values
+        results = []
+        for idx, c in enumerate(obs_clusters):
+            p_corrected = np.sum(null_masses >= c['mass']) / self.n_permutations
+            results.append({
+                'Cluster_ID': idx + 1,
+                'Start_Index': int(c['start_idx']),
+                'End_Index': int(c['end_idx']),
+                'Start_Minute': float(target_grid[c['start_idx']]),
+                'End_Minute': float(target_grid[c['end_idx']]),
+                'Observed_Mass': float(c['mass']),
+                'p_corrected': float(p_corrected)
+            })
+            
+        return results
+
 
 def generate_html_report(base_path, experiment_description, gui_log_callback):
     """Gera relatório HTML completo com estatísticas clássicas OLS, resumos CSV na pasta 'results' e gráficos."""
@@ -80,6 +240,7 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
     ols_html = ""
     highlight_html = ""
     json_data_str = "{}"
+    cluster_results_data = {}
     
     try:
         gui_log_callback("Tentando processar estatísticas de Regressão Linear (OLS) pareadas...")
@@ -561,6 +722,87 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
 
         # Injeta os dados diretamente para funcionamento 100% offline
         json_data_str = json.dumps(features_json_data, ensure_ascii=False)
+
+        # --- TIME-SERIES CLUSTER-BASED PERMUTATION TEST ---
+        gui_log_callback("Processando análise de permutação baseada em clusters (Time-Series)...")
+        try:
+            # Obter a grade comum de minutos
+            all_mins = []
+            for c_name, c_df in all_data.items():
+                if 'minute' in c_df.columns:
+                    all_mins.extend(c_df['minute'].dropna().unique())
+            all_mins = sorted(list(set(all_mins)))
+            
+            if not all_mins:
+                all_mins = list(range(100))
+                
+            # Limita a grade a no máximo 500 pontos para manter a performance
+            if len(all_mins) > 500:
+                target_grid = np.linspace(all_mins[0], all_mins[-1], 500)
+            else:
+                target_grid = np.array(all_mins)
+                
+            # Determina min_replicates dinamicamente com base nas amostras disponíveis
+            min_reps_across_classes = 9999
+            for c_name, c_df in all_data.items():
+                if 'source_file' in c_df.columns:
+                    n_reps = len(c_df['source_file'].unique())
+                    if n_reps < min_reps_across_classes:
+                        min_reps_across_classes = n_reps
+            min_reps = max(2, min(3, min_reps_across_classes))
+            
+            cluster_test_obj = TimeSeriesClusterTest(n_permutations=1000, alpha_local=0.05, min_replicates=min_reps)
+            
+            classes = sorted(all_data.keys())
+            
+            # Executa o teste de permutação para todas as colunas
+            for col in all_cols:
+                groups_list = []
+                valid_classes = []
+                
+                for c_name in classes:
+                    c_df = all_data[c_name]
+                    if 'source_file' not in c_df.columns or col not in c_df.columns:
+                        continue
+                    
+                    class_series = []
+                    for rep in c_df['source_file'].unique():
+                        rep_df = c_df[c_df['source_file'] == rep].sort_values('minute')
+                        x = rep_df['minute'].values
+                        y = rep_df[col].values
+                        
+                        mask = ~np.isnan(y) & ~np.isnan(x)
+                        if np.sum(mask) < 2:
+                            continue
+                            
+                        f_interp = scipy.interpolate.interp1d(
+                            x[mask], y[mask],
+                            kind='linear',
+                            bounds_error=False,
+                            fill_value=np.nan
+                        )
+                        resampled = f_interp(target_grid)
+                        class_series.append(resampled)
+                        
+                    if len(class_series) >= min_reps:
+                        groups_list.append(np.array(class_series))
+                        valid_classes.append(c_name)
+                
+                if len(groups_list) >= 2:
+                    clusters = cluster_test_obj.run_permutation_test(groups_list, target_grid)
+                    passed = any(c['p_corrected'] < 0.05 for c in clusters)
+                    
+                    cluster_results_data[col] = {
+                        'feature': col,
+                        'clusters': clusters,
+                        'passed': passed,
+                        'valid_classes': valid_classes
+                    }
+        except Exception as e_cluster:
+            gui_log_callback(f"Erro no cálculo do teste de permutação por clusters: {e_cluster}")
+            import traceback
+            gui_log_callback(traceback.format_exc())
+
     except Exception as e:
         gui_log_callback(f"Erro geral nas análises avançadas: {e}")
 
@@ -601,7 +843,8 @@ def generate_html_report(base_path, experiment_description, gui_log_callback):
         "summary_table_html": summary_table_html,
         "comparison_table_html": comparison_table_html,
         "ols_html": ols_html,
-        "charts": features_json_data
+        "charts": features_json_data,
+        "cluster_analysis": cluster_results_data
     }
 
     report_json_path = results_path / "report_data.json"
